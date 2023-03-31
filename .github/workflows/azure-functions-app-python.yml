@@ -20,8 +20,8 @@ name: Deploy Python project to Azure Function App
 
 on:
   push:
-    paths:
-    - FastAPI
+    branches: ['main']
+    paths: ['FastAPI/**']
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'your-app-name'   # set this to your function app name on Azure
