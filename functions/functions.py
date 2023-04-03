@@ -24,6 +24,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 
 # Keras
 from keras.models import Sequential
@@ -36,7 +37,6 @@ from keras.preprocessing.text import Tokenizer
 import tensorflow as tf
 from tensorflow.keras import activations, optimizers, losses
 from transformers import DistilBertTokenizer, TFDistilBertForSequenceClassification
-
 
 # Tensorflow
 from tensorflow import keras
@@ -133,7 +133,6 @@ def clean_text(text):
     - Supprime les tweets d'une longueur supérieure à 150 caractères
     - Convertis les émojis en texte
     - Supprime les liens
-    - Supprime les stop-words
     - Supprime les chiffres dans tout le corpus
     - Supprime les caractères spéciaux                                                                                                             
     '''
@@ -142,7 +141,6 @@ def clean_text(text):
     text = text if len(text) <= 150 else [] # Supprime les tweets d'une longueur supérieure à 150 caractères
     text = emoji.demojize(text) # Convertis les émojis en texte
     text = re.sub('https?://\S+|www\.\S+', '', text) # Supprime les liens
-    text = re.sub(re.compile(r'\b(' + r'|'.join(stopwords.words("english")) + r')\b\s*'), '', text) # Supprime les stop-words
     text = re.sub(r'[0-9]', '', text) # Supprime les chiffres dans tout le corpus
     text = re.sub(r"[^a-zA-Z0-9 ]", " ", text) # Supprime les caractères spéciaux
     text = re.sub(' +', ' ', text) # Supprime les espaces et n'en laisse qu'un s'ils y en a plus que 1
@@ -167,6 +165,17 @@ def confusion_report_matrix(title, y_test, log_pred):
     plt.title(title, fontsize=20)
     sns.heatmap(cf_matrix/np.sum(cf_matrix), annot=True, 
                 fmt='.2%', cmap='Blues')
+    
+# def make_pipeline_for_model(count=False):
+#     if count == False:
+#         vectorizer = TfidfVectorizer()
+#         model = LogisticRegression()
+#         pipeline = make_pipeline(vectorizer, model)
+#     if count == True:
+#         vectorizer = CountVectorizer()
+#         model = LogisticRegression()
+#         pipeline = make_pipeline(vectorizer, model)
+#     return pipeline
 
 def all_models_generator(model_name, model_type, embedding_layer, epochs, batch_size, tableau_score, X_train, X_test, X_val, y_train, y_test, y_val):
     '''Entraînement des modèles, récupération des temps d'entraînements, des prédictions et du tableau contenant tous les scores'''
@@ -282,22 +291,24 @@ def all_models_generator(model_name, model_type, embedding_layer, epochs, batch_
         if model_type == "LSTM":
             model=Sequential()
             model.add(embedding_layer),
-            model.add(Dense(128))
+            model.add(Dense(200))
             model.add(Dropout(0.5))
             model.add(
                 Bidirectional(
-                    LSTM(64, dropout=0.5, return_sequences=True)
+                    LSTM(100, dropout=0.5, return_sequences=True)
                 )
             )
             model.add(GlobalMaxPooling1D())
             model.add(Dropout(0.5))
-            model.add(Dense(16, activation="relu"))
+            model.add(Dense(50, activation="relu"))
             model.add(Dropout(0.5))
             model.add(Dense(1, activation="sigmoid"))
 
             model.summary()
 
             model.compile(optimizer="adam",loss='binary_crossentropy', metrics=['accuracy','AUC'])
+
+
 
             y_train = np.asarray(y_train).astype('int64').reshape((-1,1))
             y_test = np.asarray(y_test).astype('int64').reshape((-1,1))
@@ -338,14 +349,43 @@ def all_models_generator(model_name, model_type, embedding_layer, epochs, batch_
             mlflow.log_metric("accuracy_score_test", accuracy_score(y_test, pred_test))
             mlflow.log_metric("accuracy_score_val", accuracy_score(y_val, pred_val))
 
-        if model_type == "REG":
-            model = LogisticRegression()
+        if model_type == "REG_TFIDF":
+            pipeline = Pipeline([('tf_idf', TfidfVectorizer(lowercase=False)), ('logistic_regression', LogisticRegression())])
+
             start = time.time()
-            model.fit(X_train, y_train)
+            pipeline.fit(X_train, y_train)
             stop = time.time()
 
-            pred_test = model.predict(X_test)
-            pred_val = model.predict(X_val)
+            pred_test = pipeline.predict(X_test)
+            pred_val = pipeline.predict(X_val)
+
+            mlflow.log_metric("auc_score_test", roc_auc_score(y_test, pred_test))
+            mlflow.log_metric("auc_score_val", roc_auc_score(y_val, pred_val))
+
+            mlflow.log_metric("f1_score_test", f1_score(y_test, pred_test))
+            mlflow.log_metric("f1_score_val", f1_score(y_val, pred_val))
+
+            mlflow.log_metric("precision_score_test", precision_score(y_test, pred_test))
+            mlflow.log_metric("precision_score_val", precision_score(y_val, pred_val))
+
+            mlflow.log_metric("recall_score_test", recall_score(y_test, pred_test))
+            mlflow.log_metric("recall_score_val", recall_score(y_val, pred_val))
+
+            mlflow.log_metric("fbeta_score_test", fbeta_score(y_test, pred_test, beta=0.5))
+            mlflow.log_metric("fbeta_score_val", fbeta_score(y_val, pred_val, beta=0.5))
+
+            mlflow.log_metric("accuracy_score_test", accuracy_score(y_test, pred_test))
+            mlflow.log_metric("accuracy_score_val", accuracy_score(y_val, pred_val))
+
+        if model_type == "REG_COUNT":
+            pipeline = Pipeline(steps=[('Count_vectorizer', CountVectorizer()), ('logistic_regression', LogisticRegression())])
+
+            start = time.time()
+            pipeline.fit(X_train, y_train)
+            stop = time.time()
+
+            pred_test = pipeline.predict(X_test)
+            pred_val = pipeline.predict(X_val)
 
             mlflow.log_metric("auc_score_test", roc_auc_score(y_test, pred_test))
             mlflow.log_metric("auc_score_val", roc_auc_score(y_val, pred_val))
@@ -398,7 +438,10 @@ def all_models_generator(model_name, model_type, embedding_layer, epochs, batch_
                                                                       "Rappel-score_val", "F-bêta-score_test", "F-bêta-score_val", 
                                                                       "accuracy-score_test", "accuracy-score_val"]), ignore_index=True)
 
-    return model, pred_test, time_training, tableau_score, history
+    if model_type == "REG_TFIDF" or model_type == "REG_COUNT":
+        return pipeline, pred_test, time_training, tableau_score
+    else:
+        return model, pred_test, time_training, tableau_score, history
 
 def graph_courbe_roc(model, x_test, y_test, label_model_name):
     """Graphique affichant la courbe ROC des modèles"""

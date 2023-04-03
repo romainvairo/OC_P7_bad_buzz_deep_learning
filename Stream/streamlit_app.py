@@ -30,5 +30,5 @@ if proba["prediction"] == "Positive":
     st.text('Le tweet est positif, et la probabilité que ce tweet soit positif est de : ' + str(100*np.round(proba["Probability"],2)) + "%")
 
 else:
-    st.text('Le tweet est négatif, et la probabilité que ce tweet soit négatif est de :' + str(100*np.round(proba["Probability"],2)) + "%")
+    st.text('Le tweet est négatif, et la probabilité que ce tweet soit négatif est de : ' + str(100*np.round(proba["Probability"],2)) + "%")
 
